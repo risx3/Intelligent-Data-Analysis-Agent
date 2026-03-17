@@ -1,0 +1,24 @@
+# ── LLM (Ollama — local, no API key) ─────────────────────────────────────────
+requests>=2.31.0          # HTTP client for Ollama REST API
+
+# ── Data processing ───────────────────────────────────────────────────────────
+pandas>=2.2.0
+numpy>=1.26.0
+openpyxl>=3.1.0           # Excel support
+pyarrow>=15.0.0           # Parquet support
+
+# ── Visualisation ─────────────────────────────────────────────────────────────
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# ── API service (Level 2 / 4) ─────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9   # file upload support
+
+# ── UI dashboard (Level 4) ────────────────────────────────────────────────────
+streamlit>=1.35.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+pydantic>=2.7.0
