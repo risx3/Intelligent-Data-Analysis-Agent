@@ -1,10 +1,18 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Any
+from config import DEFAULT_MODEL, MAX_QUERY_LENGTH
 
 
 class AnalyseRequest(BaseModel):
     query: str = Field("", description="Optional natural-language analysis goal")
-    model: str = Field("qwen2.5:3b", description="Ollama model to use")
+    model: str = Field(DEFAULT_MODEL, description="Ollama model to use")
+
+    @field_validator("query")
+    @classmethod
+    def query_length(cls, v: str) -> str:
+        if len(v) > MAX_QUERY_LENGTH:
+            raise ValueError(f"query must be at most {MAX_QUERY_LENGTH} characters")
+        return v
 
 
 class SessionStatus(BaseModel):
@@ -23,8 +31,15 @@ class AnalysisResult(BaseModel):
 
 
 class QueryRequest(BaseModel):
-    question: str
-    model: str = "qwen2.5:3b"
+    question: str = Field(..., description="Follow-up question about the analysis")
+    model: str = Field(DEFAULT_MODEL, description="Ollama model to use")
+
+    @field_validator("question")
+    @classmethod
+    def question_length(cls, v: str) -> str:
+        if len(v) > MAX_QUERY_LENGTH:
+            raise ValueError(f"question must be at most {MAX_QUERY_LENGTH} characters")
+        return v
 
 
 class QueryResponse(BaseModel):

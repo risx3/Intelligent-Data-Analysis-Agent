@@ -5,7 +5,7 @@ enabling multi-turn natural-language queries over a completed analysis session.
 import asyncio
 from memory.session_store import SessionStore
 from utils.llm import call_llm_with_history
-from config import DEFAULT_MODEL
+from config import DEFAULT_MODEL, MEMORY_HISTORY_WINDOW
 
 SYSTEM_PROMPT = """You are a data analysis assistant with access to a completed EDA report.
 Answer the user's question using ONLY the data from the analysis context provided.
@@ -33,8 +33,8 @@ class MemoryManager:
         history = data.get("messages", [])
         messages = [{"role": "system", "content": SYSTEM_PROMPT + "\n\n" + context}]
 
-        # Add prior turns (limit to last 10 to stay within context)
-        for msg in history[-10:]:
+        # Add prior turns (limit to configured window to stay within context)
+        for msg in history[-MEMORY_HISTORY_WINDOW:]:
             messages.append({"role": msg["role"], "content": msg["content"]})
 
         # Add current question

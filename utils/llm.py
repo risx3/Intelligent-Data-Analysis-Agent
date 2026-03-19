@@ -5,6 +5,9 @@ just a running Ollama instance (ollama serve).
 """
 import requests
 from config import OLLAMA_BASE_URL, DEFAULT_MODEL, OLLAMA_TIMEOUT
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def call_llm(system_prompt: str, user_prompt: str, model: str = DEFAULT_MODEL) -> str:
@@ -45,7 +48,14 @@ def check_ollama_health() -> bool:
     try:
         r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
         return r.status_code == 200
-    except Exception:
+    except requests.ConnectionError:
+        logger.warning("Ollama health check failed: connection refused at %s", OLLAMA_BASE_URL)
+        return False
+    except requests.Timeout:
+        logger.warning("Ollama health check timed out at %s", OLLAMA_BASE_URL)
+        return False
+    except requests.RequestException as exc:
+        logger.warning("Ollama health check failed: %s", exc)
         return False
 
 
@@ -55,5 +65,9 @@ def list_available_models() -> list[str]:
         r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
         r.raise_for_status()
         return [m["name"] for m in r.json().get("models", [])]
-    except Exception:
+    except requests.ConnectionError:
+        logger.warning("Could not list Ollama models: connection refused at %s", OLLAMA_BASE_URL)
+        return []
+    except requests.RequestException as exc:
+        logger.warning("Could not list Ollama models: %s", exc)
         return []

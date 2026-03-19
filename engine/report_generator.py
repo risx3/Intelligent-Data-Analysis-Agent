@@ -1,8 +1,16 @@
 import os
-import json
+import re
 from datetime import datetime
 from typing import Any
 from config import REPORTS_DIR
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+def _sanitize_filename_base(name: str) -> str:
+    """Replace any character that is not alphanumeric or underscore with '_'."""
+    return re.sub(r"[^\w]", "_", name)
 
 
 def build_report(context: dict[str, Any], user_query: str = "") -> dict:
@@ -11,7 +19,8 @@ def build_report(context: dict[str, Any], user_query: str = "") -> dict:
     Returns a dict with the report path and content.
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename_base = context.get("load_data", {}).get("filename", "dataset").replace(".", "_")
+    raw_base      = context.get("load_data", {}).get("filename", "dataset")
+    filename_base = _sanitize_filename_base(os.path.splitext(raw_base)[0])
     report_filename = f"report_{filename_base}_{timestamp}.md"
     report_path = os.path.join(REPORTS_DIR, report_filename)
 
@@ -139,5 +148,5 @@ def build_report(context: dict[str, Any], user_query: str = "") -> dict:
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(report_content)
 
-    print(f"\n  Report saved → {report_path}")
+    logger.info("Report saved → %s", report_path)
     return {"report_path": report_path, "content": report_content}

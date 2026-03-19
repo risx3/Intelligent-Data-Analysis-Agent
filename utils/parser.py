@@ -1,5 +1,8 @@
 import json
 import re
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def extract_json(text: str) -> dict:
@@ -16,21 +19,21 @@ def extract_json(text: str) -> dict:
         try:
             return json.loads(match.group(1))
         except json.JSONDecodeError:
-            pass
+            logger.debug("Failed to parse JSON from markdown code block")
 
-    # Try extracting any JSON object in the text
-    match = re.search(r"(\{[\s\S]*\})", text)
+    # Try extracting a JSON object — non-greedy to avoid merging multiple objects
+    match = re.search(r"(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})", text, re.DOTALL)
     if match:
         try:
             return json.loads(match.group(1))
         except json.JSONDecodeError:
-            pass
+            logger.debug("Failed to parse extracted JSON object from text")
 
-    raise ValueError(f"No valid JSON found in LLM response:\n{text}")
+    raise ValueError(f"No valid JSON found in LLM response:\n{text[:500]}")
 
 
-def safe_float(value) -> float | None:
+def safe_float(value: object) -> float | None:
     try:
-        return float(value)
+        return float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None

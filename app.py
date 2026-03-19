@@ -16,7 +16,10 @@ import asyncio
 
 from engine.async_executor import AsyncAnalysisExecutor
 from utils.llm import check_ollama_health, list_available_models
+from utils.logger import get_logger
 from config import DEFAULT_MODEL
+
+logger = get_logger(__name__)
 
 
 def main() -> int:
@@ -34,13 +37,12 @@ def main() -> int:
 
     # Health check
     if not check_ollama_health():
-        print("ERROR: Ollama is not reachable at the configured URL.")
-        print("       Start Ollama with:  ollama serve")
+        logger.error("Ollama is not reachable at the configured URL. Start with: ollama serve")
         return 1
 
     if args.list_models:
         models = list_available_models()
-        print("Available models:")
+        logger.info("Available models: %s", models)
         for m in models:
             print(f"  {m}")
         return 0
@@ -52,15 +54,14 @@ def main() -> int:
     )
     result = asyncio.run(executor.run())
 
-    print(f"\n{'='*60}")
-    print("  Analysis Complete")
-    print(f"{'='*60}")
-    print(f"  Report : {result.get('report')}")
-    print(f"  Plots  : {len(result.get('plots', []))} generated")
+    logger.info("=" * 60)
+    logger.info("Analysis Complete")
+    logger.info("Report : %s", result.get("report"))
+    logger.info("Plots  : %d generated", len(result.get("plots", [])))
     failed = [e for e in result.get("execution_log", []) if e["status"] == "failed"]
     if failed:
-        print(f"  Issues : {[e['step'] for e in failed]}")
-    print()
+        logger.warning("Failed steps: %s", [e["step"] for e in failed])
+    logger.info("=" * 60)
     return 0
 
 

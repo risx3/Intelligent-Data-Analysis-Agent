@@ -7,7 +7,10 @@ Level 2 upgrade:
 """
 from utils.llm import call_llm
 from utils.parser import extract_json
+from utils.logger import get_logger
 from config import DEFAULT_MODEL
+
+logger = get_logger(__name__)
 
 SYSTEM_PROMPT = """You are a data analysis planning agent.
 
@@ -36,6 +39,12 @@ Rules:
   Supported types: scatter, bar, line, histogram, box, heatmap, pie, count
 - If no query, viz_intents may be empty.
 """
+
+_DEFAULT_STEPS = [
+    "load_data", "describe_data", "check_missing_values",
+    "run_basic_stats", "correlation_matrix",
+    "generate_visualizations", "build_insights", "generate_report",
+]
 
 
 def create_plan(
@@ -67,16 +76,18 @@ Create the analysis plan."""
 
     try:
         plan = extract_json(response)
-    except ValueError:
-        plan = {}
+    except ValueError as exc:
+        logger.warning(
+            "Planner could not parse LLM response as JSON — using default plan. Error: %s", exc
+        )
+        plan = {"_auto_generated": True}
 
-    plan.setdefault("steps", [
-        "load_data", "describe_data", "check_missing_values",
-        "run_basic_stats", "correlation_matrix",
-        "generate_visualizations", "build_insights", "generate_report",
-    ])
+    plan.setdefault("steps", _DEFAULT_STEPS)
     plan.setdefault("focus_columns", [])
     plan.setdefault("analysis_goals", [])
     plan.setdefault("viz_intents", [])
+
+    if plan.get("_auto_generated"):
+        logger.warning("Using auto-generated default plan (LLM did not return valid JSON)")
 
     return plan

@@ -28,7 +28,10 @@ from agents.viz_agent import VizAgent
 from agents.insight_agent import generate_insights, regenerate_with_critique
 from agents.critic_agent import review_insights, build_eda_summary
 from engine.report_generator import build_report
+from utils.logger import get_logger
 from config import DEFAULT_MODEL, REFLECTION_ENABLED, REFLECTION_MAX_RETRIES
+
+logger = get_logger(__name__)
 
 
 class MultiAgentOrchestrator:
@@ -45,7 +48,7 @@ class MultiAgentOrchestrator:
     # ── public ─────────────────────────────────────────────────────────────────
 
     async def run(self, filepath: str, user_query: str = "") -> dict:
-        self._print_header(filepath, user_query)
+        self._log_header(filepath, user_query)
 
         # 1. Load data (fast, sync)
         await self._step("load_data",
@@ -56,14 +59,14 @@ class MultiAgentOrchestrator:
         await self._step("plan",
                          asyncio.to_thread(create_plan, meta, user_query, self.model))
         plan = self.context["plan"]
-        print(f"  Steps : {plan['steps']}")
+        logger.info("Steps : %s", plan["steps"])
         if plan.get("analysis_goals"):
-            print(f"  Goals : {plan['analysis_goals']}")
+            logger.info("Goals : %s", plan["analysis_goals"])
 
         df = self.context["load_data"]["dataframe"]
 
         # 3. EDA + Viz in parallel
-        print("\n[Parallel] EDA + Visualisations...")
+        logger.info("[Parallel] EDA + Visualisations...")
         eda_agent = EDAAgent(model=self.model)
         viz_agent = VizAgent(model=self.model)
         eda_result, viz_result = await asyncio.gather(
@@ -74,7 +77,7 @@ class MultiAgentOrchestrator:
         self.context["generate_visualizations"] = viz_result
 
         # 4. Insights with optional reflection loop
-        print("\n[InsightAgent] Generating insights...")
+        logger.info("[InsightAgent] Generating insights...")
         insights = await self._run_reflection_loop(user_query)
         self.context["build_insights"] = insights
 
@@ -115,7 +118,7 @@ class MultiAgentOrchestrator:
             )
             score   = critique.get("score", 7)
             verdict = critique.get("verdict", "accept")
-            print(f"  [Critic] attempt {attempt} — score {score}/10 → {verdict}")
+            logger.info("[Critic] attempt %d — score %d/10 → %s", attempt, score, verdict)
 
             if verdict == "accept":
                 break
@@ -138,13 +141,13 @@ class MultiAgentOrchestrator:
         except Exception as exc:
             self.context[name] = {"error": str(exc)}
             self._record(name, "failed", time.time() - start, str(exc))
-            print(f"    [!] {name} failed: {exc}")
+            logger.error("[!] %s failed: %s", name, exc, exc_info=True)
 
     async def _timed(self, label: str, coro):
         start = time.time()
         result = await coro
         elapsed = round(time.time() - start, 2)
-        print(f"  [✓] {label} ({elapsed}s)")
+        logger.info("[✓] %s (%ss)", label, elapsed)
         return result
 
     def _record(self, step: str, status: str, duration: float, error: str = ""):
@@ -153,7 +156,7 @@ class MultiAgentOrchestrator:
             entry["error"] = error
         self.log.append(entry)
         sym = "✓" if status == "success" else "✗"
-        print(f"  [{sym}] {step} ({entry['duration_sec']}s)")
+        logger.info("[%s] %s (%.2fs)", sym, step, entry["duration_sec"])
 
     def _meta(self) -> dict:
         return {k: v for k, v in self.context.get("load_data", {}).items()
@@ -168,10 +171,10 @@ class MultiAgentOrchestrator:
             "insights":      self.context.get("build_insights", ""),
         }
 
-    def _print_header(self, filepath: str, query: str):
-        print(f"\n{'='*60}")
-        print("  Multi-Agent Data Analysis Orchestrator")
-        print(f"  File  : {filepath}")
+    def _log_header(self, filepath: str, query: str):
+        logger.info("=" * 60)
+        logger.info("Multi-Agent Data Analysis Orchestrator")
+        logger.info("File  : %s", filepath)
         if query:
-            print(f"  Query : {query}")
-        print(f"{'='*60}\n")
+            logger.info("Query : %s", query)
+        logger.info("=" * 60)

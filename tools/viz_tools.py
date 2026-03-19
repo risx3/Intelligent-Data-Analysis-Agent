@@ -11,7 +11,18 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
-from config import PLOTS_DIR
+from config import (
+    PLOTS_DIR,
+    VIZ_MAX_HIST_COLS,
+    VIZ_MAX_BOX_COLS,
+    VIZ_MAX_BAR_ROWS,
+    VIZ_MAX_PIE_SLICES,
+    VIZ_TOP_CAT_COLS,
+    VIZ_TOP_VALUES,
+)
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 sns.set_theme(style="whitegrid", palette="muted")
 
@@ -55,7 +66,7 @@ def generate_plot(
 
     # 1. Distribution histograms
     if numeric_cols:
-        n = min(len(numeric_cols), 6)
+        n = min(len(numeric_cols), VIZ_MAX_HIST_COLS)
         sub = numeric_cols[:n]
         rows = (n + 1) // 2
         fig, axes = plt.subplots(rows, 2, figsize=(14, 4 * rows))
@@ -80,7 +91,7 @@ def generate_plot(
 
     # 3. Box plots
     if numeric_cols:
-        n = min(len(numeric_cols), 8)
+        n = min(len(numeric_cols), VIZ_MAX_BOX_COLS)
         fig, ax = plt.subplots(figsize=(max(10, n * 1.5), 6))
         df[numeric_cols[:n]].boxplot(ax=ax, patch_artist=True)
         ax.set_title("Box Plots (Outlier Detection)", fontsize=14)
@@ -88,8 +99,8 @@ def generate_plot(
         saved.append(_save(fig, "boxplots.png"))
 
     # 4. Top-value bar charts for categorical columns
-    for col in cat_cols[:3]:
-        top = df[col].value_counts().head(10)
+    for col in cat_cols[:VIZ_TOP_CAT_COLS]:
+        top = df[col].value_counts().head(VIZ_TOP_VALUES)
         fig, ax = plt.subplots(figsize=(10, 5))
         sns.barplot(x=top.values, y=top.index.astype(str), ax=ax, palette="Blues_d")
         ax.set_title(f"Top Values: {col}", fontsize=14)
@@ -106,6 +117,7 @@ def generate_plot(
         plt.close("all")
         saved.append(path)
 
+    logger.info("Standard EDA plots saved: %d charts", len(saved))
     return saved
 
 
@@ -134,7 +146,12 @@ def generate_dynamic_plot(df: pd.DataFrame, spec: dict) -> str | None:
         match plot_type:
             case "scatter":
                 x, y = spec.get("x"), spec.get("y")
-                if not (x in df.columns and y in df.columns):
+                missing = [c for c in (x, y) if c not in df.columns]
+                if missing:
+                    logger.warning(
+                        "scatter plot skipped — columns not found: %s. Available: %s",
+                        missing, df.columns.tolist(),
+                    )
                     return None
                 fig, ax = plt.subplots(figsize=(9, 6))
                 sns.scatterplot(data=df, x=x, y=y, hue=hue_col, ax=ax, alpha=0.7)
@@ -143,7 +160,12 @@ def generate_dynamic_plot(df: pd.DataFrame, spec: dict) -> str | None:
 
             case "line":
                 x, y = spec.get("x"), spec.get("y")
-                if not (x in df.columns and y in df.columns):
+                missing = [c for c in (x, y) if c not in df.columns]
+                if missing:
+                    logger.warning(
+                        "line plot skipped — columns not found: %s. Available: %s",
+                        missing, df.columns.tolist(),
+                    )
                     return None
                 sorted_df = df[[x, y]].dropna().sort_values(x)
                 fig, ax = plt.subplots(figsize=(11, 5))
@@ -154,6 +176,10 @@ def generate_dynamic_plot(df: pd.DataFrame, spec: dict) -> str | None:
             case "histogram":
                 col = spec.get("column") or spec.get("x")
                 if col not in df.columns:
+                    logger.warning(
+                        "histogram skipped — column '%s' not found. Available: %s",
+                        col, df.columns.tolist(),
+                    )
                     return None
                 fig, ax = plt.subplots(figsize=(9, 5))
                 sns.histplot(df[col].dropna(), kde=True, ax=ax, color="steelblue")
@@ -163,6 +189,10 @@ def generate_dynamic_plot(df: pd.DataFrame, spec: dict) -> str | None:
             case "box":
                 col = spec.get("column") or spec.get("y")
                 if col not in df.columns:
+                    logger.warning(
+                        "box plot skipped — column '%s' not found. Available: %s",
+                        col, df.columns.tolist(),
+                    )
                     return None
                 fig, ax = plt.subplots(figsize=(8, 5))
                 sns.boxplot(data=df, y=col, x=hue_col, ax=ax, palette="Set2")
@@ -172,8 +202,12 @@ def generate_dynamic_plot(df: pd.DataFrame, spec: dict) -> str | None:
             case "bar":
                 col = spec.get("column") or spec.get("x")
                 if col not in df.columns:
+                    logger.warning(
+                        "bar chart skipped — column '%s' not found. Available: %s",
+                        col, df.columns.tolist(),
+                    )
                     return None
-                top = df[col].value_counts().head(15)
+                top = df[col].value_counts().head(VIZ_MAX_BAR_ROWS)
                 fig, ax = plt.subplots(figsize=(10, 5))
                 sns.barplot(x=top.values, y=top.index.astype(str),
                             ax=ax, palette="Blues_d")
@@ -183,10 +217,14 @@ def generate_dynamic_plot(df: pd.DataFrame, spec: dict) -> str | None:
             case "count":
                 col = spec.get("column") or spec.get("x")
                 if col not in df.columns:
+                    logger.warning(
+                        "count plot skipped — column '%s' not found. Available: %s",
+                        col, df.columns.tolist(),
+                    )
                     return None
                 fig, ax = plt.subplots(figsize=(10, 5))
                 order = df[col].value_counts().index.tolist()
-                sns.countplot(data=df, x=col, hue=hue_col, order=order[:15], ax=ax)
+                sns.countplot(data=df, x=col, hue=hue_col, order=order[:VIZ_MAX_BAR_ROWS], ax=ax)
                 ax.set_title(title)
                 ax.tick_params(axis="x", rotation=35)
                 fname = f"dynamic_count_{col}.png"
@@ -194,8 +232,12 @@ def generate_dynamic_plot(df: pd.DataFrame, spec: dict) -> str | None:
             case "pie":
                 col = spec.get("column")
                 if col not in df.columns:
+                    logger.warning(
+                        "pie chart skipped — column '%s' not found. Available: %s",
+                        col, df.columns.tolist(),
+                    )
                     return None
-                counts = df[col].value_counts().head(8)
+                counts = df[col].value_counts().head(VIZ_MAX_PIE_SLICES)
                 fig, ax = plt.subplots(figsize=(8, 8))
                 ax.pie(counts.values, labels=counts.index.astype(str),
                        autopct="%1.1f%%", startangle=140)
@@ -205,6 +247,10 @@ def generate_dynamic_plot(df: pd.DataFrame, spec: dict) -> str | None:
             case "heatmap":
                 cols = _safe_cols(df, spec.get("columns", []))
                 if len(cols) < 2:
+                    logger.warning(
+                        "heatmap skipped — fewer than 2 valid columns found in spec %s. Available: %s",
+                        spec.get("columns"), df.columns.tolist(),
+                    )
                     return None
                 corr = df[cols].corr()
                 fig, ax = plt.subplots(figsize=(max(6, len(cols)), max(5, len(cols)-1)))
@@ -214,11 +260,12 @@ def generate_dynamic_plot(df: pd.DataFrame, spec: dict) -> str | None:
                 fname = f"dynamic_heatmap_{'_'.join(cols[:4])}.png"
 
             case _:
+                logger.warning("Unknown plot type '%s' — skipping", plot_type)
                 return None
 
         return _save(fig, fname)
 
     except Exception as exc:
-        print(f"    [viz] Could not render {plot_type}: {exc}")
+        logger.error("Could not render %s plot: %s", plot_type, exc, exc_info=True)
         plt.close("all")
         return None

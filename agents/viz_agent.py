@@ -10,8 +10,11 @@ import asyncio
 import pandas as pd
 from utils.llm import call_llm
 from utils.parser import extract_json
+from utils.logger import get_logger
 from tools.viz_tools import generate_plot, generate_dynamic_plot
 from config import DEFAULT_MODEL
+
+logger = get_logger(__name__)
 
 _INTENT_SYSTEM = """You are a data visualisation expert.
 Given a dataset description and a user query, decide which plots would best answer the query.
@@ -84,7 +87,11 @@ Which 4 plots would best answer the query?"""
             response = call_llm(_INTENT_SYSTEM, prompt, model=self.model)
             data = extract_json(response)
             return data.get("plots", [])
-        except Exception:
+        except ValueError as exc:
+            logger.warning("VizAgent could not parse intent from LLM response: %s", exc)
+            return []
+        except Exception as exc:
+            logger.error("VizAgent intent parsing failed unexpectedly: %s", exc, exc_info=True)
             return []
 
     def _render_dynamic(self, df: pd.DataFrame, intents: list[dict]) -> list[str]:
